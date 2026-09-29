@@ -2,164 +2,226 @@ import streamlit as st
 import networkx as nx
 from pyvis.network import Network
 import streamlit.components.v1 as components
-import random
+import pandas as pd
 
-# --- CONFIGURACIÓN INICIAL ---
-st.set_page_config(layout="wide", page_title="Visualizador de Componentes Fuertemente Conexas")
+# --- CONFIGURACIÓN DE PÁGINA (Sin Scroll) ---
+st.set_page_config(layout="wide", page_title="Componentes Conexas")
 
-# Inicializar variables de sesión si no existen
+# Reducir márgenes al máximo para que quepa en una sola pantalla
+st.markdown("""
+    <style>
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; max-width: 95%; }
+        header { visibility: hidden; }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        .stButton>button { width: 100%; padding: 0.2rem; }
+        .stSelectbox>div>div>div { padding: 0.2rem; }
+        h1, h2, h3 { margin-top: 0; padding-top: 0; }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- INICIALIZACIÓN DEL ESTADO ---
 if 'grafo' not in st.session_state:
-    st.session_state.grafo = nx.DiGraph()
-if 'estados' not in st.session_state:
-    st.session_state.estados = []
-if 'paso_actual' not in st.session_state:
-    st.session_state.paso_actual = 0
+    st.session_state.grafo = nx.DiGraph() # Grafo DIRIGIDO
+    st.session_state.grafo.add_nodes_from(range(6))
+if 'paso' not in st.session_state:
+    st.session_state.paso = 0
 
-# --- LÓGICA DEL ALGORITMO (KOSARAJU) CON CAPTURA DE ESTADOS ---
-def generar_estados_kosaraju(G):
-    estados = []
-    colores = {n: '#CCCCCC' for n in G.nodes()} # Gris por defecto
-    aristas_actuales = list(G.edges())
+# --- LÓGICA DEL ALGORITMO MATRICIAL ---
+def calcular_todas_las_matrices(G):
+    nodos = list(G.nodes())
+    n = len(nodos)
+    if n == 0: return None
+        
+    # Paso 0: Adyacencia original
+    M_orig = [[1 if G.has_edge(u, v) else 0 for v in nodos] for u in nodos]
+                
+    # Paso 1: 1s en la diagonal
+    M_diag = [fila[:] for fila in M_orig]
+    for i in range(n): M_diag[i][i] = 1
+        
+    # Paso 2: Floyd-Warshall (Caminos)
+    M_cam = [fila[:] for fila in M_diag]
+    for k in range(n):
+        for i in range(n):
+            for j in range(n):
+                M_cam[i][j] = M_cam[i][j] or (M_cam[i][k] and M_cam[k][j])
+                
+    # Paso 3 y 4: Ordenar filas y columnas
+    datos_filas = []
+    for i in range(n):
+        cant = sum(M_cam[i])
+        primer = M_cam[i].index(1) if 1 in M_cam[i] else n 
+        datos_filas.append({'idx': i, 'cant': cant, 'primer': primer, 'nodo': nodos[i]})
+        
+    datos_filas.sort(key=lambda x: (-x['cant'], x['primer']))
+    nuevo_orden = [d['idx'] for d in datos_filas]
+    nodos_ord = [d['nodo'] for d in datos_filas]
     
-    def guardar_estado(msg):
-        # Guardamos una copia exacta de colores y aristas en este momento
-        estados.append({
-            "colores": colores.copy(),
-            "aristas": list(aristas_actuales),
-            "msg": msg
-        })
-
-    guardar_estado("Inicio: Grafo original.")
-
-    # Fase 1: DFS para llenar la pila
+    M_filas = [M_cam[i][:] for i in nuevo_orden]
+    M_final = [[M_filas[i][j] for j in nuevo_orden] for i in range(n)]
+    
+    # Extraer componentes conexas reales (Bloques cuadrados en la diagonal)
     visitados = set()
-    pila = []
+    componentes = []
+    for i in range(n):
+        if nodos_ord[i] not in visitados:
+            # Para formar un bloque cuadrado diagonal, la relación debe ser mutua (ida y vuelta)
+            comp = [nodos_ord[j] for j in range(n) if M_final[i][j] == 1 and M_final[j][i] == 1]
+            if comp:
+                componentes.append(comp)
+                visitados.update(comp)
+
+    return {
+        'orig': M_orig, 'diag': M_diag, 'cam': M_cam, 'filas': M_filas, 'final': M_final,
+        'nodos': nodos, 'nodos_ord': nodos_ord, 'componentes': componentes
+    }
+
+# --- RENDERIZADO DEL GRAFO ---
+def mostrar_grafo(G, componentes=None):
+    net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='black')
     
-    def dfs1(v):
-        visitados.add(v)
-        colores[v] = '#F5B041' # Naranja: Visitando
-        guardar_estado(f"Fase 1: Visitando nodo {v}")
-        for vecino in G.successors(v):
-            if vecino not in visitados:
-                dfs1(vecino)
-        pila.append(v)
-        colores[v] = '#85C1E9' # Azul: Terminado
-        guardar_estado(f"Fase 1: Nodo {v} explorado completamente. Añadido a la pila.")
+    # Colorear por componentes si estamos en el paso final
+    colores = ['#E74C3C', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C', '#E67E22', '#34495E']
+    color_map = {}
+    if componentes:
+        for idx, comp in enumerate(componentes):
+            c = colores[idx % len(colores)]
+            for nodo in comp: color_map[nodo] = c
 
     for nodo in G.nodes():
-        if nodo not in visitados:
-            dfs1(nodo)
-
-    # Fase 2: Grafo Traspuesto
-    aristas_actuales = [(v, u) for (u, v) in aristas_actuales] # Invertimos aristas para visualización
-    colores = {n: '#CCCCCC' for n in G.nodes()} # Reseteamos colores
-    guardar_estado("Fase 2: Se invierten las aristas del grafo (Grafo Traspuesto) y reseteamos nodos.")
-
-    # Fase 3: Segundo DFS para encontrar SCC
-    visitados.clear()
-    GT = G.reverse()
-    
-    # Paleta de colores para las componentes
-    paleta_scc = ['#E74C3C', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C', '#E67E22', '#34495E']
-    scc_count = 0
-
-    def dfs2(v, color_scc):
-        visitados.add(v)
-        colores[v] = color_scc
-        guardar_estado(f"Fase 3: Añadiendo nodo {v} al Componente Conexo actual.")
-        for vecino in GT.successors(v):
-            if vecino not in visitados:
-                dfs2(vecino, color_scc)
-
-    while pila:
-        nodo = pila.pop()
-        if nodo not in visitados:
-            color_actual = paleta_scc[scc_count % len(paleta_scc)]
-            dfs2(nodo, color_actual)
-            scc_count += 1
-            guardar_estado(f"Fase 3: ¡Componente Fuertemente Conexa {scc_count} completada!")
-
-    guardar_estado("¡Algoritmo finalizado! Los colores iguales representan nodos en la misma componente.")
-    return estados
-
-# --- FUNCION PARA RENDERIZAR PYVIS ---
-def mostrar_grafo(nodos, aristas, colores):
-    net = Network(height='500px', width='100%', directed=True, bgcolor='#ffffff', font_color='black')
-    for nodo in nodos:
-        net.add_node(nodo, label=str(nodo), color=colores.get(nodo, '#CCCCCC'))
-    for origen, destino in aristas:
+        color = color_map.get(nodo, '#85C1E9') # Azul por defecto
+        net.add_node(nodo, label=str(nodo), color=color)
+    for origen, destino in G.edges():
         net.add_edge(origen, destino)
-    
-    # Opciones de físicas para que no rebote demasiado
-    net.set_options("""
-    var options = {
-      "physics": {"barnesHut": {"springLength": 100, "springConstant": 0.04}}
-    }
-    """)
+        
+    net.set_options('{"physics": {"barnesHut": {"springLength": 80, "springConstant": 0.05}}}')
     net.save_graph("grafo.html")
     with open("grafo.html", "r", encoding="utf-8") as f:
-        components.html(f.read(), height=550)
+        components.html(f.read(), height=310)
 
-# --- INTERFAZ DE USUARIO (UI) ---
-st.title("🧩 Visualizador: Componentes Fuertemente Conexas")
+# --- ESTILOS DE TABLA ---
+def resaltar_unos(val):
+    return 'background-color: #2ECC71; color: white; font-weight: bold;' if val == 1 else 'color: #D3D3D3;'
 
-# PANEL LATERAL: Controles
-with st.sidebar:
-    st.header("1. Crear Grafo")
-    num_nodos = st.slider("Número de nodos", 4, 12, 6)
+def aplicar_estilo(df):
+    try:
+        return df.style.map(resaltar_unos)
+    except AttributeError:
+        return df.style.applymap(resaltar_unos)
+
+# --- INTERFAZ PRINCIPAL (2 COLUMNAS) ---
+st.markdown("## 🧩 Análisis Interactivo de Componentes Conexas")
+
+# Contenedor de la lógica central
+datos = calcular_todas_las_matrices(st.session_state.grafo)
+
+col_izq, col_der = st.columns([1.2, 2])
+
+# ==========================================
+# COLUMNA IZQUIERDA: CONFIGURACIÓN Y GRAFO
+# ==========================================
+with col_izq:
+    st.markdown("#### 1. Configuración del Grafo")
     
-    tab_auto, tab_manual = st.tabs(["Aleatorio", "Manual"])
-    
-    with tab_auto:
-        if st.button("Generar Grafo Aleatorio"):
-            st.session_state.grafo = nx.gnp_random_graph(num_nodos, 0.3, directed=True)
-            st.session_state.estados = [] # Resetear
-            st.session_state.paso_actual = 0
+    n_nodos = st.number_input("Cantidad de Nodos [4-12]:", min_value=4, max_value=12, value=len(st.session_state.grafo.nodes))
+    if n_nodos != len(st.session_state.grafo.nodes):
+        st.session_state.grafo = nx.empty_graph(n_nodos, create_using=nx.DiGraph)
+        st.session_state.paso = 0
+        st.rerun()
+
+    t_rnd, t_man = st.tabs(["Aleatorio", "Manual"])
+    with t_rnd:
+        if st.button("🎲 Generar Aleatorio"):
+            st.session_state.grafo = nx.gnp_random_graph(n_nodos, 0.25, directed=True)
+            st.session_state.paso = 0
+            st.rerun()
             
-    with tab_manual:
-        st.write("Añade aristas al grafo vacío:")
-        if st.button("Limpiar Grafo"):
-            st.session_state.grafo = nx.DiGraph()
-            st.session_state.grafo.add_nodes_from(range(num_nodos))
-            st.session_state.estados = []
-            
-        col1, col2 = st.columns(2)
-        with col1: orig = st.selectbox("Origen", range(num_nodos))
-        with col2: dest = st.selectbox("Destino", range(num_nodos))
-        if st.button("Añadir Arista"):
-            st.session_state.grafo.add_edge(orig, dest)
-            st.session_state.estados = [] # Requiere recalcular
+    with t_man:
+        c1, c2, c3 = st.columns([1, 1, 1.2])
+        with c1: orig = st.selectbox("Origen", range(n_nodos))
+        with c2: dest = st.selectbox("Destino", range(n_nodos))
+        with c3:
+            if st.button("➕ Unir"):
+                st.session_state.grafo.add_edge(orig, dest)
+                st.session_state.paso = 0
+                st.rerun()
+            if st.button("➖ Quitar"):
+                if st.session_state.grafo.has_edge(orig, dest):
+                    st.session_state.grafo.remove_edge(orig, dest)
+                    st.session_state.paso = 0
+                    st.rerun()
 
-    st.header("2. Ejecutar")
-    if st.button("Calcular Pasos del Algoritmo", type="primary"):
-        if len(st.session_state.grafo.nodes) > 0:
-            st.session_state.estados = generar_estados_kosaraju(st.session_state.grafo)
-            st.session_state.paso_actual = 0
+    st.markdown("#### Vista del Grafo")
+    comp_a_pintar = datos['componentes'] if st.session_state.paso == 5 else None
+    mostrar_grafo(st.session_state.grafo, comp_a_pintar)
 
-# PANEL PRINCIPAL: Visualización
-if not st.session_state.estados:
-    st.info("👈 Crea un grafo y presiona 'Calcular Pasos del Algoritmo' en la barra lateral.")
-    # Mostrar el grafo actual sin estados
-    if len(st.session_state.grafo.nodes) > 0:
-        mostrar_grafo(st.session_state.grafo.nodes(), st.session_state.grafo.edges(), {})
-else:
-    # Controles de avance y retroceso
-    col1, col2, col3 = st.columns([1, 3, 1])
+# ==========================================
+# COLUMNA DERECHA: PASO A PASO DEL ALGORITMO
+# ==========================================
+with col_der:
+    st.markdown("#### 2. Ejecución del Algoritmo")
     
-    with col1:
-        if st.button("⬅️ Anterior") and st.session_state.paso_actual > 0:
-            st.session_state.paso_actual -= 1
+    b1, b2, b3 = st.columns([1, 2, 1])
+    with b1:
+        if st.button("⬅️ Anterior") and st.session_state.paso > 0:
+            st.session_state.paso -= 1
+            st.rerun()
+    with b2:
+        st.markdown(f"<h5 style='text-align: center; color: #3498DB;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
+    with b3:
+        if st.button("Siguiente ➡️") and st.session_state.paso < 5:
+            st.session_state.paso += 1
+            st.rerun()
+
+    if datos is not None:
+        p = st.session_state.paso
+        nodos = datos['nodos']
+        nodos_ord = datos['nodos_ord']
+        
+        if p == 0:
+            st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas entre los nodos generados.")
+            df = pd.DataFrame(datos['orig'], index=nodos, columns=nodos)
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
-    with col3:
-        if st.button("Siguiente ➡️") and st.session_state.paso_actual < len(st.session_state.estados) - 1:
-            st.session_state.paso_actual += 1
-
-    # Obtener el estado actual
-    estado_actual = st.session_state.estados[st.session_state.paso_actual]
-    
-    with col2:
-        st.markdown(f"<h4 style='text-align: center; color: #1f77b4;'>Paso {st.session_state.paso_actual + 1} de {len(st.session_state.estados)}</h4>", unsafe_allow_html=True)
-        st.success(estado_actual["msg"])
-
-    # Renderizar el grafo en su estado actual
-    mostrar_grafo(st.session_state.grafo.nodes(), estado_actual["aristas"], estado_actual["colores"])
+        elif p == 1:
+            st.info("**Paso 1: Diagonal Unitaria.** Agregamos `1` en la diagonal asumiendo que todo nodo se alcanza a sí mismo (Reflexividad).")
+            df = pd.DataFrame(datos['diag'], index=nodos, columns=nodos)
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
+            
+        elif p == 2:
+            st.info("**Paso 2: Matriz de Caminos (Floyd-Warshall).** Calculamos todas las conexiones transitivas (indirectas).")
+            df = pd.DataFrame(datos['cam'], index=nodos, columns=nodos)
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
+            
+        elif p == 3:
+            st.info("**Paso 3: Ordenamiento de Filas.** Contamos los `1`s por fila y las ordenamos de mayor a menor para agrupar nodos de la misma componente.")
+            df = pd.DataFrame(datos['filas'], index=nodos_ord, columns=nodos) 
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
+            
+        elif p == 4:
+            st.info("**Paso 4: Ordenamiento de Columnas.** Al ordenar las columnas igual que las filas, los nodos fuertemente conexos formarán bloques cuadrados perfectos a lo largo de la diagonal.")
+            df = pd.DataFrame(datos['final'], index=nodos_ord, columns=nodos_ord)
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
+            
+        elif p == 5:
+            st.success("**Paso 5: Solución Final.** El grafo ha sido coloreado basándose estrictamente en los bloques cuadrados diagonales.")
+            comps = datos['componentes']
+            st.write(f"📊 **Número total de componentes conexas:** `{len(comps)}`")
+            
+            # Creamos dos sub-columnas: Izquierda (Grupos) y Derecha (Matriz)
+            col_res_izq, col_res_der = st.columns([1, 1.2]) 
+            
+            with col_res_izq:
+                # Repartir los grupos en 2 columnas para que queden compactos
+                c_cols = st.columns(2) 
+                for idx, comp in enumerate(comps):
+                    with c_cols[idx % 2]:
+                        st.markdown(f"**Grupo {idx+1}:**<br/>{comp}", unsafe_allow_html=True)
+                        st.markdown("<br/>", unsafe_allow_html=True) # Ligero espacio vertical
+            
+            with col_res_der:
+                st.markdown("**Matriz Final:**")
+                df = pd.DataFrame(datos['final'], index=nodos_ord, columns=nodos_ord)
+                # Al quitar use_container_width=True, la tabla colapsa a su tamaño mínimo, viéndose cuadrada
+                st.dataframe(aplicar_estilo(df), height=280)
