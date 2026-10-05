@@ -4,10 +4,9 @@ from pyvis.network import Network
 import streamlit.components.v1 as components
 import pandas as pd
 
-# --- CONFIGURACIÓN DE PÁGINA (Sin Scroll) ---
+# Configuración de la página
 st.set_page_config(layout="wide", page_title="Componentes Conexas")
 
-# Reducir márgenes al máximo para que quepa en una sola pantalla
 st.markdown("""
     <style>
         .block-container { padding-top: 1rem; padding-bottom: 0rem; max-width: 95%; }
@@ -20,14 +19,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- INICIALIZACIÓN DEL ESTADO ---
+# Estados del grafo
 if 'grafo' not in st.session_state:
-    st.session_state.grafo = nx.DiGraph() # Grafo DIRIGIDO
-    st.session_state.grafo.add_nodes_from(range(6))
+    st.session_state.grafo = nx.DiGraph()
+    st.session_state.grafo.add_nodes_from(range(6)) # Agregamos 6 nodos por default
 if 'paso' not in st.session_state:
     st.session_state.paso = 0
 
-# --- LÓGICA DEL ALGORITMO MATRICIAL ---
+# Algoritmo
 def calcular_todas_las_matrices(G):
     nodos = list(G.nodes())
     n = len(nodos)
@@ -61,12 +60,11 @@ def calcular_todas_las_matrices(G):
     M_filas = [M_cam[i][:] for i in nuevo_orden]
     M_final = [[M_filas[i][j] for j in nuevo_orden] for i in range(n)]
     
-    # Extraer componentes conexas reales (Bloques cuadrados en la diagonal)
+    # Extraer componentes conexas reales
     visitados = set()
     componentes = []
     for i in range(n):
         if nodos_ord[i] not in visitados:
-            # Para formar un bloque cuadrado diagonal, la relación debe ser mutua (ida y vuelta)
             comp = [nodos_ord[j] for j in range(n) if M_final[i][j] == 1 and M_final[j][i] == 1]
             if comp:
                 componentes.append(comp)
@@ -77,11 +75,10 @@ def calcular_todas_las_matrices(G):
         'nodos': nodos, 'nodos_ord': nodos_ord, 'componentes': componentes
     }
 
-# --- RENDERIZADO DEL GRAFO ---
+# Dibujar el grafo
 def mostrar_grafo(G, componentes=None):
     net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='black')
     
-    # Colorear por componentes si estamos en el paso final
     colores = ['#E74C3C', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C', '#E67E22', '#34495E']
     color_map = {}
     if componentes:
@@ -90,7 +87,7 @@ def mostrar_grafo(G, componentes=None):
             for nodo in comp: color_map[nodo] = c
 
     for nodo in G.nodes():
-        color = color_map.get(nodo, '#85C1E9') # Azul por defecto
+        color = color_map.get(nodo, '#85C1E9')
         net.add_node(nodo, label=str(nodo), color=color)
     for origen, destino in G.edges():
         net.add_edge(origen, destino)
@@ -100,7 +97,7 @@ def mostrar_grafo(G, componentes=None):
     with open("grafo.html", "r", encoding="utf-8") as f:
         components.html(f.read(), height=310)
 
-# --- ESTILOS DE TABLA ---
+# Tabla
 def resaltar_unos(val):
     return 'background-color: #2ECC71; color: white; font-weight: bold;' if val == 1 else 'color: #D3D3D3;'
 
@@ -110,17 +107,14 @@ def aplicar_estilo(df):
     except AttributeError:
         return df.style.applymap(resaltar_unos)
 
-# --- INTERFAZ PRINCIPAL (2 COLUMNAS) ---
-st.markdown("## 🧩 Análisis Interactivo de Componentes Conexas")
+# Interfaz
+st.markdown("## 🔍 Análisis Interactivo de Componentes Conexas")
 
-# Contenedor de la lógica central
 datos = calcular_todas_las_matrices(st.session_state.grafo)
 
 col_izq, col_der = st.columns([1.2, 2])
 
-# ==========================================
-# COLUMNA IZQUIERDA: CONFIGURACIÓN Y GRAFO
-# ==========================================
+# Configuracion grafo
 with col_izq:
     st.markdown("#### 1. Configuración del Grafo")
     
@@ -156,9 +150,7 @@ with col_izq:
     comp_a_pintar = datos['componentes'] if st.session_state.paso == 5 else None
     mostrar_grafo(st.session_state.grafo, comp_a_pintar)
 
-# ==========================================
-# COLUMNA DERECHA: PASO A PASO DEL ALGORITMO
-# ==========================================
+# Ejcución del algoritmo
 with col_der:
     st.markdown("#### 2. Ejecución del Algoritmo")
     
@@ -180,48 +172,45 @@ with col_der:
         nodos_ord = datos['nodos_ord']
         
         if p == 0:
-            st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas entre los nodos generados.")
+            st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas del grafo sin cambios.")
             df = pd.DataFrame(datos['orig'], index=nodos, columns=nodos)
             st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 1:
-            st.info("**Paso 1: Diagonal Unitaria.** Agregamos `1` en la diagonal asumiendo que todo nodo se alcanza a sí mismo (Reflexividad).")
+            st.info("**Paso 1: Diagonal de Unos.** Agregamos `1`s en la diagonal si es necesario.")
             df = pd.DataFrame(datos['diag'], index=nodos, columns=nodos)
             st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 2:
-            st.info("**Paso 2: Matriz de Caminos (Floyd-Warshall).** Calculamos todas las conexiones transitivas (indirectas).")
+            st.info("**Paso 2: Matriz de Caminos (Floyd-Warshall).** Calculamos todas las conexiones transitivas.")
             df = pd.DataFrame(datos['cam'], index=nodos, columns=nodos)
             st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 3:
-            st.info("**Paso 3: Ordenamiento de Filas.** Contamos los `1`s por fila y las ordenamos de mayor a menor para agrupar nodos de la misma componente.")
+            st.info("**Paso 3: Ordenamiento de Filas.** Contamos los `1`s por fila y las ordenamos de mayor a menor.")
             df = pd.DataFrame(datos['filas'], index=nodos_ord, columns=nodos) 
             st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 4:
-            st.info("**Paso 4: Ordenamiento de Columnas.** Al ordenar las columnas igual que las filas, los nodos fuertemente conexos formarán bloques cuadrados perfectos a lo largo de la diagonal.")
+            st.info("**Paso 4: Ordenamiento de Columnas.** Ordenamos tambien por columnas, y los bloques cuadrados diagonales serán componentes conexas.")
             df = pd.DataFrame(datos['final'], index=nodos_ord, columns=nodos_ord)
             st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 5:
-            st.success("**Paso 5: Solución Final.** El grafo ha sido coloreado basándose estrictamente en los bloques cuadrados diagonales.")
+            st.success("**Paso 5: Componentes Conexas.** Se muestran las componentes conexas coloreadas.")
             comps = datos['componentes']
             st.write(f"📊 **Número total de componentes conexas:** `{len(comps)}`")
             
-            # Creamos dos sub-columnas: Izquierda (Grupos) y Derecha (Matriz)
             col_res_izq, col_res_der = st.columns([1, 1.2]) 
             
             with col_res_izq:
-                # Repartir los grupos en 2 columnas para que queden compactos
                 c_cols = st.columns(2) 
                 for idx, comp in enumerate(comps):
                     with c_cols[idx % 2]:
                         st.markdown(f"**Grupo {idx+1}:**<br/>{comp}", unsafe_allow_html=True)
-                        st.markdown("<br/>", unsafe_allow_html=True) # Ligero espacio vertical
+                        st.markdown("<br/>", unsafe_allow_html=True)
             
             with col_res_der:
                 st.markdown("**Matriz Final:**")
                 df = pd.DataFrame(datos['final'], index=nodos_ord, columns=nodos_ord)
-                # Al quitar use_container_width=True, la tabla colapsa a su tamaño mínimo, viéndose cuadrada
                 st.dataframe(aplicar_estilo(df), height=280)
