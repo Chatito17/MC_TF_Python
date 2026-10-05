@@ -126,7 +126,7 @@ with col_izq:
 
     t_rnd, t_man = st.tabs(["Aleatorio", "Manual"])
     with t_rnd:
-        if st.button("🎲 Generar Aleatorio"):
+        if st.button("Generar Aleatorio"):
             st.session_state.grafo = nx.gnp_random_graph(n_nodos, 0.25, directed=True)
             st.session_state.paso = 0
             st.rerun()
