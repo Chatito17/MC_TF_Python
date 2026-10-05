@@ -77,7 +77,7 @@ def calcular_todas_las_matrices(G):
 
 # Dibujar el grafo
 def mostrar_grafo(G, componentes=None):
-    net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='black')
+    net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='white')
     
     colores = ['#E74C3C', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C', '#E67E22', '#34495E']
     color_map = {}
@@ -108,7 +108,7 @@ def aplicar_estilo(df):
         return df.style.applymap(resaltar_unos)
 
 # Interfaz
-st.markdown("## 🔍 Análisis Interactivo de Componentes Conexas")
+st.markdown("## Análisis Interactivo de Componentes Conexas")
 
 datos = calcular_todas_las_matrices(st.session_state.grafo)
 
@@ -126,7 +126,7 @@ with col_izq:
 
     t_rnd, t_man = st.tabs(["Aleatorio", "Manual"])
     with t_rnd:
-        if st.button("🎲 Generar Aleatorio"):
+        if st.button("Generar Aleatorio"):
             st.session_state.grafo = nx.gnp_random_graph(n_nodos, 0.25, directed=True)
             st.session_state.paso = 0
             st.rerun()
@@ -136,11 +136,11 @@ with col_izq:
         with c1: orig = st.selectbox("Origen", range(n_nodos))
         with c2: dest = st.selectbox("Destino", range(n_nodos))
         with c3:
-            if st.button("➕ Unir"):
+            if st.button("Unir"):
                 st.session_state.grafo.add_edge(orig, dest)
                 st.session_state.paso = 0
                 st.rerun()
-            if st.button("➖ Quitar"):
+            if st.button("Quitar"):
                 if st.session_state.grafo.has_edge(orig, dest):
                     st.session_state.grafo.remove_edge(orig, dest)
                     st.session_state.paso = 0
@@ -156,13 +156,13 @@ with col_der:
     
     b1, b2, b3 = st.columns([1, 2, 1])
     with b1:
-        if st.button("⬅️ Anterior") and st.session_state.paso > 0:
+        if st.button("Anterior") and st.session_state.paso > 0:
             st.session_state.paso -= 1
             st.rerun()
     with b2:
         st.markdown(f"<h5 style='text-align: center; color: #3498DB;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
     with b3:
-        if st.button("Siguiente ➡️") and st.session_state.paso < 5:
+        if st.button("Siguiente") and st.session_state.paso < 5:
             st.session_state.paso += 1
             st.rerun()
 
