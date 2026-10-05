@@ -174,7 +174,7 @@ with col_der:
         if p == 0:
             st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas del grafo sin cambios.")
             df = pd.DataFrame(datos['orig'], index=nodos, columns=nodos)
-            st.dataframe(height=250, use_container_width=True)
+            st.dataframe(aplicar_estilo(df),height=250, use_container_width=True)
             
         elif p == 1:
             st.info("**Paso 1: Diagonal de Unos.** Agregamos `1`s en la diagonal si es necesario.")
