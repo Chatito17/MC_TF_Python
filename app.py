@@ -162,7 +162,7 @@ with col_der:
     with b2:
         st.markdown(f"<h5 style='text-align: center; color: #3498DB;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
     with b3:
-        if st.button("Siguiente") and st.session_state.paso < 3:
+        if st.button("Siguiente") and st.session_state.paso < 1:
             st.session_state.paso += 1
             st.rerun()
 
