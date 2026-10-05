@@ -160,7 +160,7 @@ with col_der:
             st.session_state.paso -= 1
             st.rerun()
     with b2:
-        st.markdown(f"<h5 style='text-align: center; color: #3498DB;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='text-align: center; color: #f7f7f7;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
     with b3:
         if st.button("Siguiente") and st.session_state.paso < 5:
             st.session_state.paso += 1
@@ -174,7 +174,7 @@ with col_der:
         if p == 0:
             st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas del grafo sin cambios.")
             df = pd.DataFrame(datos['orig'], index=nodos, columns=nodos)
-            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
+            st.dataframe(height=250, use_container_width=True)
             
         elif p == 1:
             st.info("**Paso 1: Diagonal de Unos.** Agregamos `1`s en la diagonal si es necesario.")
