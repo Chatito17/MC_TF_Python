@@ -77,7 +77,7 @@ def calcular_todas_las_matrices(G):
 
 # Dibujar el grafo
 def mostrar_grafo(G, componentes=None):
-    net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='white')
+    net = Network(height='300px', width='100%', directed=True, bgcolor='#ffffff', font_color='black')
     
     colores = ['#E74C3C', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C', '#E67E22', '#34495E']
     color_map = {}
@@ -126,7 +126,7 @@ with col_izq:
 
     t_rnd, t_man = st.tabs(["Aleatorio", "Manual"])
     with t_rnd:
-        if st.button("Generar Aleatorio"):
+        if st.button("🎲 Generar Aleatorio"):
             st.session_state.grafo = nx.gnp_random_graph(n_nodos, 0.25, directed=True)
             st.session_state.paso = 0
             st.rerun()
@@ -160,7 +160,7 @@ with col_der:
             st.session_state.paso -= 1
             st.rerun()
     with b2:
-        st.markdown(f"<h5 style='text-align: center; color: #f7f7f7;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='text-align: center; color: #3498DB;'>Paso {st.session_state.paso} de 5</h5>", unsafe_allow_html=True)
     with b3:
         if st.button("Siguiente") and st.session_state.paso < 5:
             st.session_state.paso += 1
@@ -174,7 +174,7 @@ with col_der:
         if p == 0:
             st.info("**Paso 0: Matriz de Adyacencia.** Muestra las conexiones directas del grafo sin cambios.")
             df = pd.DataFrame(datos['orig'], index=nodos, columns=nodos)
-            st.dataframe(aplicar_estilo(df),height=250, use_container_width=True)
+            st.dataframe(aplicar_estilo(df), height=250, use_container_width=True)
             
         elif p == 1:
             st.info("**Paso 1: Diagonal de Unos.** Agregamos `1`s en la diagonal si es necesario.")
@@ -199,7 +199,7 @@ with col_der:
         elif p == 5:
             st.success("**Paso 5: Componentes Conexas.** Se muestran las componentes conexas coloreadas.")
             comps = datos['componentes']
-            st.write(f"📊 **Número total de componentes conexas:** `{len(comps)}`")
+            st.write(f"**Número total de componentes conexas:** `{len(comps)}`")
             
             col_res_izq, col_res_der = st.columns([1, 1.2]) 
             
