@@ -108,7 +108,7 @@ def aplicar_estilo(df):
         return df.style.applymap(resaltar_unos)
 
 # Interfaz
-st.markdown("## Análisis Interactivo de Componentes Conexas")
+st.markdown("## Componentes Conexas (Fuertemente conexas)")
 
 datos = calcular_todas_las_matrices(st.session_state.grafo)
 
